@@ -13,14 +13,14 @@ from Deeploy.MemoryLevelExtension.MemoryLevels import MemoryHierarchy, MemoryLev
 from Deeploy.MemoryLevelExtension.NetworkDeployers.MemoryLevelDeployer import MemoryPlatform, MemoryPlatformWrapper
 from Deeploy.Targets.Generic.Bindings import BasicGEMMBindings, BasicPad1DBindings, BasicPad2DBindings, \
     BasicRQIntegerDivBinding
-from Deeploy.Targets.Generic.Layers import AddLayer, ConcatLayer, ConvLayer, GatherLayer, GELUGradLayer, GELULayer, \
-    GEMMLayer, LayerNormGradLayer, LayerNormLayer, MatMulLayer, MaxPoolLayer, MulLayer, PadLayer, QuantLayer, \
+from Deeploy.Targets.Generic.Layers import AddLayer, ConcatLayer, ConvLayer, ExpLayer, GatherLayer, GELUGradLayer, \
+    GELULayer, GEMMLayer, LayerNormGradLayer, LayerNormLayer, MatMulLayer, MaxPoolLayer, MulLayer, PadLayer, QuantLayer, \
     ReduceMeanLayer, ReduceSumLayer, ReluLayer, RequantShiftLayer, ReshapeLayer, RQIntegerDivLayer, RQSiGELULayer, \
-    RQSiHardswishLayer, SGDLayer, SliceLayer, SoftmaxCrossEntropyLossGradLayer, SoftmaxCrossEntropyLossLayer, \
-    SoftmaxGradLayer, SoftmaxLayer, TransposeLayer, iHardswishLayer, iRMSNormLayer
-from Deeploy.Targets.Generic.Parsers import AddParser, ConcatParser, DequantParser, FlattenParser, GatherParser, \
-    GELUGradParser, GELUParser, GEMMParser, LayerNormGradParser, LayerNormParser, MatMulParser, MaxPool1DParser, \
-    MaxPool2DParser, MulParser, Pad1DParser, Pad2DParser, QuantParser, ReduceSumParser, ReluParser, \
+    RQSiHardswishLayer, SGDLayer, SingleOperationPerElementLayer, SliceLayer, SoftmaxCrossEntropyLossGradLayer, \
+    SoftmaxCrossEntropyLossLayer, SoftmaxGradLayer, SoftmaxLayer, TransposeLayer, iHardswishLayer, iRMSNormLayer
+from Deeploy.Targets.Generic.Parsers import AddParser, ConcatParser, DequantParser, ExpParser, FlattenParser, \
+    GatherParser, GELUGradParser, GELUParser, GEMMParser, LayerNormGradParser, LayerNormParser, MatMulParser, \
+    MaxPool1DParser, MaxPool2DParser, MulParser, Pad1DParser, Pad2DParser, QuantParser, ReduceSumParser, ReluParser, \
     RequantShiftParser, ReshapeParser, RQAddParser, RQIntegerDivParser, RQSiGELUParser, RQSiHardswishParser, \
     SGDParser, SliceParser, SoftmaxCrossEntropyLossGradParser, SoftmaxCrossEntropyLossParser, SoftmaxGradParser, \
     SoftmaxParser, TransposeParser, UniformRequantShiftParser, UnsqueezeParser, iHardswishParser, iRMSNormParser, \
@@ -52,12 +52,18 @@ from Deeploy.Targets.PULPOpen.Tiler import PULPAddTilingReadyBindings, PULPConca
     PULPTransposeTilingReadyBindings, PULPUniformRQSTilingReadyBindings
 from Deeploy.Targets.PULPOpen.TopologyOptimizationPasses.Passes import PULPAddRequantMergePass, \
     PULPConvRequantMergePass, PULPGEMMRequantMergePass, PULPMatMulRequantMergePass
+from Deeploy.Targets.PULPOpen.Bindings import PULPPACEBinding, PULPPACEInvBinding
+from Deeploy.Targets.PULPOpen.Parsers import PACEParser, PACEInvParser
+from Deeploy.Targets.Generic.Platform import ExpMapper
 
 RQAddMapper = NodeMapper(RQAddParser(), PULPRQAddTilingReadyBindings)
 AddMapper = NodeMapper(AddParser(), PULPAddTilingReadyBindings)
 FlattenMapper = NodeMapper(FlattenParser(), PULPFlattenTilingReadyBindings)
 GELUMapper = NodeMapper(GELUParser(), PULPFPGELUTilingReadyBindings)
 GELUGradMapper = NodeMapper(GELUGradParser(), PULPFPGELUGradTilingReadyBindings)
+PACEGELUMapper = NodeMapper(PACEParser(), [PULPPACEBinding])
+PACEExpMapper = NodeMapper(PACEParser(), [PULPPACEBinding])
+PACEReciprocalMapper = NodeMapper(PACEInvParser(), [PULPPACEInvBinding])
 GatherMapper = NodeMapper(GatherParser(), PULPGatherTilingReadyBindings)
 MulMapper = NodeMapper(MulParser(), PULPMulTilingReadyBindings)
 Pad1DMapper = NodeMapper(Pad1DParser(), BasicPad1DBindings)
@@ -121,7 +127,9 @@ PULPMapping = {
     'RequantizedConv': PULPRQSConvLayer(RQSConvMappers),
     'RequantizedGemm': PULPRQSGEMMLayer([MatrixVecMapper, TallGEMMMapper, GEMMMapper]),
     'Gemm': GEMMLayer([FloatGEMMMapper, GEMMDequantMapper]),
-    'Gelu': GELULayer([GELUMapper]),
+    'Gelu': GELULayer([PACEGELUMapper, GELUMapper]),
+    'Exp': ExpLayer([PACEExpMapper, ExpMapper]),
+    'Reciprocal': SingleOperationPerElementLayer([PACEReciprocalMapper]),
     'GeluGrad': GELUGradLayer([GELUGradMapper]),
     'LayerNormalization': LayerNormLayer([LayerNormMapper]),
     'LayerNormalizationGrad': LayerNormGradLayer([LayerNormGradMapper]),

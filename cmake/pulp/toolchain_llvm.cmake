@@ -28,6 +28,7 @@ add_compile_options(
   -fdata-sections
   -fomit-frame-pointer
   -mno-relax
+  -DGVSOC_SIMULATION
   -O3
   -DNUM_CORES=${NUM_CORES}
   -MP

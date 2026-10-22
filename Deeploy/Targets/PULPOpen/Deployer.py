@@ -18,6 +18,7 @@ from Deeploy.Targets.Generic.TopologyOptimizationPasses.Passes import ReshapeCon
     TransposeMergePass, TransposeNoPermOptPass, TransposeSplitPass
 from Deeploy.Targets.PULPOpen.Platform import PULPClusterEngine
 from Deeploy.Targets.PULPOpen.TopologyOptimizationPasses.Passes import RQAddTransposeSquashPass
+from Deeploy.Targets.PULPOpen.Templates.PACETemplate import PACEInitCode
 
 _L3AllocTemplate = NodeTemplate("""
 ${locPtr} = cl_ram_malloc(${size});
@@ -134,5 +135,8 @@ class PULPDeployer(SignPropDeployer):
             L3FileStr += _L3InitTemplate.generate({"locPtr": locPtr, "extName": extName, "size": size})
 
         retStr = retStr + L3FileStr
+
+        # PACE parameter SRAM initialization hoisted by PACENodeTemplate
+        retStr += "".join(obj.initCode for obj in self.ctxt.globalObjects.values() if isinstance(obj, PACEInitCode))
 
         return retStr

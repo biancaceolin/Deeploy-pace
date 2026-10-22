@@ -9,9 +9,10 @@ import onnx_graphsurgeon as gs
 
 from Deeploy.CommonExtensions.OptimizationPasses.TopologyOptimizationPasses.LoweringOptimizationPasses import \
     isPULPPointwise, isPULPStemConv
-from Deeploy.DeeployTypes import NetworkContext
+from Deeploy.DeeployTypes import NetworkContext, NodeParser, OperatorRepresentation
 from Deeploy.Targets.Generic.Parsers import Conv2DParser, GEMMParser, ReduceMeanParser, RQSConv1DParser, \
     RQSConv2DParser, RQSParserInterface
+from Deeploy.Targets.Generic.Parsers import GELUParser
 
 
 class PULPConv2DParser(RQSConv2DParser):
@@ -541,3 +542,66 @@ class PULPReduceMeanParser(ReduceMeanParser):
             return newCtxt, True
         else:
             return ctxt, False
+
+
+def _parsePACEAttributes(node: gs.Node, operatorRepresentation: OperatorRepresentation) -> bool:
+    """Read the PACE custom attributes of an ONNX node into the operator representation.
+
+    Returns False if the node carries no PACE attributes, so the layer falls back to the next mapper.
+    """
+    if 'pace_breakpoints' not in node.attrs:
+        return False
+
+    degree = node.attrs['pace_degree']
+    pace_parts = node.attrs['pace_parts']
+    breakpoints = list(node.attrs['pace_breakpoints'])
+    coeffs_flat = list(node.attrs['pace_coeffs'])
+    nCoeffs = degree + 1
+
+    if not (1 <= degree <= 4):
+        raise ValueError(f"PACE node {node.name}: pace_degree must be between 1 and 4 (got {degree}); "
+                         f"higher degrees require the unsupported loop-back extension")
+    if len(breakpoints) != pace_parts + 1 or len(coeffs_flat) != pace_parts * nCoeffs:
+        raise ValueError(f"PACE node {node.name}: expected {pace_parts + 1} breakpoints and "
+                         f"{pace_parts * nCoeffs} coefficients, got {len(breakpoints)} and {len(coeffs_flat)}")
+
+    coeffs = [coeffs_flat[i * nCoeffs:(i + 1) * nCoeffs] for i in range(pace_parts)]
+
+    # Formatted as C array initializers
+    operatorRepresentation['breakpoints'] = ', '.join([f'{b}f' for b in breakpoints])
+    operatorRepresentation['coeffs'] = ', \n    '.join(
+        ['{' + ', '.join([f'{c}f' for c in row]) + '}' for row in coeffs])
+
+    operatorRepresentation['pace_degree'] = degree
+    operatorRepresentation['pace_parts'] = pace_parts
+
+    # Raw values for packing the PACE parameter SRAM at code-generation time
+    operatorRepresentation['pace_breakpoints_list'] = breakpoints
+    operatorRepresentation['pace_coeffs_list'] = coeffs
+
+    return True
+
+
+class PACEParser(GELUParser):
+
+    def parseNode(self, node: gs.Node) -> bool:
+        return super().parseNode(node) and _parsePACEAttributes(node, self.operatorRepresentation)
+
+
+class PACEInvParser(NodeParser):
+
+    def parseNode(self, node: gs.Node) -> bool:
+        if not all([len(node.inputs) == 1, len(node.outputs) == 1]):
+            return False
+        return _parsePACEAttributes(node, self.operatorRepresentation)
+
+    def parseNodeCtxt(self,
+                      ctxt: NetworkContext,
+                      node: gs.Node,
+                      channels_first: bool = True) -> Tuple[NetworkContext, bool]:
+        data_in = ctxt.lookup(node.inputs[0].name)
+        data_out = ctxt.lookup(node.outputs[0].name)
+        self.operatorRepresentation['data_in'] = data_in.name
+        self.operatorRepresentation['data_out'] = data_out.name
+        self.operatorRepresentation['size'] = math.prod(data_in.shape)
+        return ctxt, True

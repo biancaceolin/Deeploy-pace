@@ -39,6 +39,7 @@ from Deeploy.Targets.PULPOpen.TypeCheckers import PULPConvChecker, PULPLinearChe
     PULPRequantShiftChecker
 from Deeploy.TilingExtension.CodeTransformationPasses.TilingVariableReplacement import TilingVariableReplacement, \
     TilingVariableReplacementUpdate
+from Deeploy.Targets.PULPOpen.Templates import PACETemplate, PACEInvTemplate
 
 _clusterEntryClosureCallTemplate = NodeTemplate("""
 // ${closureName} CLOSURE CALL
@@ -464,6 +465,16 @@ PULPLayernormGradBinding = NodeBinding(
 PULPFloatGELUBinding = NodeBinding(
     GELUChecker([PointerClass(float32_t), PointerClass(float32_t)], [PointerClass(float32_t)]),
     FloatGELUTemplate.referenceTemplate, ForkTransformer)
+
+PULPPACEBinding = NodeBinding(
+    GELUChecker([PointerClass(float32_t), PointerClass(float32_t)], [PointerClass(float32_t)]),
+    PACETemplate.referenceTemplate,
+    ForkTransformer)
+
+PULPPACEInvBinding = NodeBinding(
+    GELUChecker([PointerClass(float32_t)], [PointerClass(float32_t)]),
+    PACEInvTemplate.referenceTemplate,
+    ForkTransformer)
 
 PULPFloatGELUGradBinding = NodeBinding(
     GELUChecker([PointerClass(float32_t), PointerClass(float32_t)], [PointerClass(float32_t)]),
